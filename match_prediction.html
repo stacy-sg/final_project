@@ -1,0 +1,195 @@
+<!-- 경기 결과 예측 화면 -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>경기 결과 예측</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* 표 스타일 설정 */
+        .game-schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .game-schedule-table th, .game-schedule-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+    </style>
+    <!-- 여기에 추가적인 스타일시트나 스크립트를 연결할 수 있습니다. -->
+</head>
+<body class="match-prediction-page">
+    <div class="match-prediction-container">
+        <h1 class="title">경기 일정 및 예측 결과</h1>
+        <h2 class="sub_title">경기 일정 및 예측 결과를 확인할 수 있습니다.</h2>
+        <!-- 여기에 새로운 박스를 추가합니다 -->
+        <div class="date-selector-box">
+            <div class="today-design">TODAY</div>
+            <form action="{{ url_for('match_prediction') }}" method="get">
+                <!-- 년도 선택을 위한 그룹 -->
+                <div class="date-group">
+                    <label for="year">년도:</label>
+                    <select name="year" id="year-select" class="season-select">
+                        <!-- JavaScript로 년도 옵션을 채웁니다 -->
+                    </select>
+                </div>
+                <!-- 월 선택을 위한 그룹 -->
+                <div class="date-group">
+                    <label for="month">월:</label>
+                    <select name="month" id="month-select" class="season-select">
+                        <!-- JavaScript로 월 옵션을 채웁니다 -->
+                    </select>
+                    <input type="submit" value="검색">
+                </div>
+            </form>
+        </div>
+        <div class="match-results">
+            <!-- 여기에 Flask를 통해 전달받은 경기 결과를 표시합니다. -->
+            <table class="game-schedule-table">
+                <thead>
+                    <tr>
+                        <th>날짜</th>
+                        <th>팀 이름</th>
+                        <th>홈/어웨이</th>
+                        <th>승률 예측</th>
+                    </tr>
+                </thead>
+                <tbody id="game-schedule-body">
+                    <!-- 서버에서 받은 데이터를 여기에 삽입합니다. -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        function populateDateDropdowns() {
+            const yearSelect = document.getElementById('year-select');
+            const monthSelect = document.getElementById('month-select');
+
+            for (let year = 2014; year <= 2024; year++) {
+                let option = new Option(year, year);
+                yearSelect.appendChild(option);
+            }
+
+            for (let month = 1; month <= 12; month++) {
+                let option = new Option(month, month);
+                monthSelect.appendChild(option);
+            }
+        }
+
+        document.querySelector('.date-selector-box form').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const year = document.getElementById('year-select').value;
+            const month = document.getElementById('month-select').value;
+
+
+            fetch('/get-game-schedule', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `year=${year}&month=${month}`
+            }).then(response => response.json())
+            .then(scheduleData => {
+                displayGames(scheduleData);
+            }).catch(error => {
+                console.error('Error:', error);
+                // 오류 처리 로직
+            });
+        });
+
+        function displayGames(games) {
+            const scheduleBody = document.getElementById('game-schedule-body');
+            scheduleBody.innerHTML = '';
+
+            if (Array.isArray(games)) {
+                // game_id별로 그룹화
+                const groupedGames = games.reduce((acc, game) => {
+                    if (!acc[game.game_id]) {
+                        acc[game.game_id] = {
+                            game_date: game.game_date,
+                            teams: [],
+                            home_away: []
+                        };
+                    }
+                    acc[game.game_id].teams.push(game.team_name);
+                    acc[game.game_id].home_away.push(game.home_away === 0 ? "어웨이" : "홈");
+                    return acc;
+                }, {});
+
+                // 그룹화된 게임을 테이블에 추가
+                Object.values(groupedGames).forEach(game => {
+                    const row = document.createElement('tr');
+
+                    // 날짜 셀 생성 및 추가
+                    const dateCell = document.createElement('td');
+                    dateCell.textContent = game.game_date;
+                    row.appendChild(dateCell);
+
+                    // 팀 이름 셀 생성
+                    const teamNameCell = document.createElement('td');
+                    game.teams.forEach((team, index) => {
+                        if (index > 0) teamNameCell.appendChild(document.createElement('br'));
+                        const teamDiv = document.createElement('div');
+
+                        // 팀 이미지와 이름 추가
+                        const imagePath = `/static/images/${team}`;
+                        fetchImage(imagePath, teamDiv);
+
+                        const teamNameSpan = document.createElement('span');
+                        teamNameSpan.textContent = team;
+                        teamDiv.appendChild(teamNameSpan);
+                        teamNameCell.appendChild(teamDiv);
+                    });
+                    row.appendChild(teamNameCell);
+
+                    // 홈/어웨이 셀 생성
+                    const homeAwayCell = document.createElement('td');
+                    game.home_away.forEach((ha, index) => {
+                        if (index > 0) homeAwayCell.appendChild(document.createElement('br'));
+                        homeAwayCell.appendChild(document.createTextNode(ha));
+                    });
+                    row.appendChild(homeAwayCell);
+
+                    scheduleBody.appendChild(row);
+                });
+            } else {
+                // 게임 데이터가 없는 경우 처리
+                const errorRow = document.createElement('tr');
+                const errorCell = document.createElement('td');
+                errorCell.colSpan = 4;
+                errorCell.textContent = '게임 데이터를 불러올 수 없습니다.';
+                errorRow.appendChild(errorCell);
+                scheduleBody.appendChild(errorRow);
+            }
+        }
+
+        // 이미지 존재 여부를 확인하고 표시하는 함수
+        function fetchImage(imagePath, containerDiv) {
+            const formats = ['.png', '.jpg'];  // 가능한 이미지 확장자
+            formats.forEach(format => {
+                const pathWithFormat = imagePath + format;
+                fetch(pathWithFormat, { method: 'HEAD' })
+                    .then(response => {
+                        if (response.ok) {
+                            const img = document.createElement('img');
+                            img.src = pathWithFormat;
+                            img.alt = 'Team Logo';
+                            img.style.width = '50px';  // 이미지 크기 조정
+                            img.style.height = '50px';
+                            containerDiv.insertBefore(img, containerDiv.firstChild);  // 이미지를 가장 앞에 추가
+                        }
+                        // 이미지가 없는 경우 아무것도 하지 않음 (기본 이미지 사용하지 않음)
+                    })
+                    .catch(error => {
+                        console.error('Error fetching image:', error);
+                        // 오류 발생 시에도 아무것도 하지 않음
+                    });
+            });
+        }
+        window.onload = populateDateDropdowns;
+    </script>
+</body>
+</html>

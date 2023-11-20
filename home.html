@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>KBL 홈 화면</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="logo-container">
+        <img src="{{ url_for('static', filename='images/kbl_logo.jpg') }}" alt="KBL 로고">
+        <img src="{{ url_for('static', filename='images/team_logos.png') }}" alt="팀 로고" class="team-logos">
+    </div>  
+    <div class="button-box-container">
+        <div class="icon-with-button">
+            <img src="{{ url_for('static', filename='images/prediction_icon.png') }}" alt="Prediction Icon" class="button-icon">
+            <a href="{{ url_for('match_prediction') }}" class="button">
+                경기 결과 예측
+            </a>
+        </div>
+        <div class="divider"></div>
+        <div class="icon-with-button">
+            <img src="{{ url_for('static', filename='images/graph_icon.png') }}" alt="Graph Icon" class="button-icon">
+            <a href="{{ url_for('player_statistics') }}" class="button">
+                선수 데이터 통계
+            </a>
+        </div>
+    </div>
+</body>
+</html>

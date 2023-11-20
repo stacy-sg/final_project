@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>선수 데이터 통계</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body class="player-statistics-page">
+    <div class="content-wrapper">
+        <h1 class="title2">선수 평균 기록</h1>
+        <h2 class="sub_title2">시즌별 선수 통계를 확인할 수 있습니다.</h2>
+        <div class="player-statistics-container">
+            <form action="{{ url_for('player_statistics') }}" method="get" class="statistics-form">
+                <div class="today-and-season">
+                    <div class="today-design">TODAY</div>
+                    <div class="stats-info">
+                        <span class="primary-stat">1차 스탯</span>
+                        <span class="average">평균</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="season">시즌:</label>
+                        <select name="season" id="season" class="season-select">
+                            <!-- 여기에 시즌 옵션을 추가 -->
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="player">선수 이름:</label>
+                    <input type="text" name="player" id="player" class="player-input">
+                </div>
+                <input type="submit" value="검색" class="search-button">
+            </form>
+            <!-- 선수 사진과 이름을 표시할 부분 -->
+            <div class="player-info" style="display: none;">
+                <img id="playerImage" src="" alt="Player Image">
+                <h3 id="playerName"></h3>
+            </div>
+            <!-- 이미지를 표시할 컨테이너 추가 -->
+            <div class="chart-container">
+                <img id="radarChartImage" src="" alt="Radar Chart" style="display:none;">
+                <img id="playerStatsImage" src="" alt="Player Stats" style="display:none;">
+                <div id="scatter"></div>
+                <div id="reboundsGraph"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // 페이지 로드 시 초기화 함수
+        function initialize() {
+            populateSeasonDropdown();
+            setupFormSubmission();
+        }
+    
+        // 페이지 로드 시 시즌 드롭다운 채우기
+        function populateSeasonDropdown() {
+            const seasonSelect = document.getElementById('season');
+            const seasons = [
+                '2014-15', '2015-16', '2016-17', '2017-18', '2018-19',
+                '2019-20', '2020-21', '2021-22', '2022-23', '2023-24'
+            ];
+    
+            seasons.forEach(season => {
+                let option = new Option(season, season);
+                seasonSelect.appendChild(option);
+            });
+        }
+    
+        // 폼 제출 처리
+        function setupFormSubmission() {
+            document.querySelector('.statistics-form').addEventListener('submit', function(event) {
+                event.preventDefault(); 
+                const selectedSeason = document.getElementById('season').value;
+                const playerName = document.getElementById('player').value;
+                fetchPlayerData(selectedSeason, playerName);
+            });
+        }
+
+
+        function fetchPlayerData(season, playerName) {
+            // 이전에 출력된 선수 정보 및 그래프 삭제
+            const playerStatsContainer = document.querySelector('.player-info');
+            playerStatsContainer.style.display = 'none'; // 선수 정보 숨기기
+            // API URL 수정 (백틱 사용)
+            fetch(`/get-player-data?season=${encodeURIComponent(season)}&player=${encodeURIComponent(playerName)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            // 선수 데이터가 없는 경우
+                            throw new Error('존재하지 않는 선수입니다.');
+                        } else {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                     // 선수 사진 추가
+                    const playerImageBasePath = '/static/images/';
+                    const playerImageFilename = playerName.toLowerCase().replace(/\s+/g, '_') + '.jpg';
+                    const playerImageSrc = `${playerImageBasePath}${playerImageFilename}`;
+                    const defaultImageSrc = `${playerImageBasePath}profile_icon.png`;
+
+                    // 이미지 태그 생성 및 설정
+                    const playerImage = document.getElementById('playerImage');
+                    playerImage.src = playerImageSrc;
+                    playerImage.onerror = function () {
+                        this.src = defaultImageSrc;
+                    };
+                    playerImage.alt = 'Player Image';
+
+                    // 선수 이름을 표시
+                    const playerNameElement = document.getElementById('playerName');
+                    playerNameElement.textContent = playerName;
+
+                   // 선수 정보 표시
+                    playerStatsContainer.style.display = 'block';
+
+                    fetchRadarChart(season, playerName);
+                    fetchPlayerStats(season, playerName);
+                    fetchFieldGoal(season, playerName);
+                    fetchRebounds(season, playerName);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert(error.message);  // 오류 메시지를 사용자에게 표시
+
+                    // 오류 발생 시 그래프 및 차트 표시 안 함
+                    document.getElementById('radarChartImage').style.display = 'none';
+                    document.getElementById('playerStatsImage').style.display = 'none';
+                    document.getElementById('scatter').style.display = 'none';
+                    document.getElementById('reboundsGraph').style.display = 'none';
+                });
+        }
+
+        function fetchRadarChart(season, playerName) {
+            fetch(`/plot/radar-chart/${encodeURIComponent(season)}/${encodeURIComponent(playerName)}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    document.getElementById('radarChartImage').src = URL.createObjectURL(blob);
+                    document.getElementById('radarChartImage').style.display = 'block';
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // 이미지 응답을 처리하는 헬퍼 함수
+        function handleImageResponse(imageId) {
+            return function(response) {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.blob().then(blob => {
+                    const imageUrl = URL.createObjectURL(blob);
+                    // 이미지 엘리먼트를 찾아서 업데이트
+                    document.getElementById(imageId).src = imageUrl;
+                    document.getElementById(imageId).style.display = 'block';
+                });
+            }
+        }
+
+        function fetchPlayerStats(season, playerName) {
+            fetch(`/plot/player-stats/${encodeURIComponent(season)}/${encodeURIComponent(playerName)}`)
+                .then(response => response.blob())
+                .then(blob => {
+                    document.getElementById('playerStatsImage').src = URL.createObjectURL(blob);
+                    document.getElementById('playerStatsImage').style.display = 'block';
+                })
+                .catch(error => console.error('Error:', error));
+        }
+        function fetchFieldGoal(season, playerName) {
+            // Field Goal Performance 그래프 로드
+            fetch(`/plot/field-goal-performance/${encodeURIComponent(season)}/${encodeURIComponent(playerName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    Plotly.newPlot('scatter', data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function fetchRebounds(season, playerName) {
+            // Rebounds 그래프 로드
+            fetch(`/plot/rebounds/${encodeURIComponent(season)}/${encodeURIComponent(playerName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    Plotly.newPlot('reboundsGraph', data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // 페이지 로드 시 초기화
+        window.onload = initialize;
+    </script>
+</body>
+</html>
